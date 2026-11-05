@@ -22,8 +22,8 @@
 ---
 
 ### Installation
-- 》》 **VOIR **`install.md`** à la racine.
-- 》》 Assurez-vous que **Python 3.8+** est installé sur votre système, *puis installez l'outil via* **pip** :
+- 》》 **VOIR **`install.md`** à la racine**.
+- 》》 *Assurez-vous que **Python 3.8+** est installé sur votre système*, *puis installez l'outil via* **pip** :
 
 ```bash
 pip install phoneintel
