@@ -1,5 +1,9 @@
-phonenumbers
-requests
-pytest
-ruff
-mypy
+# Dépendances d'exécution PhoneINTEL (légères, compatibles Termux & Linux)
+
+# Parsing, validation E.164, opérateur, géolocalisation et fuseaux horaires
+phonenumbers>=8.13.50,<10.0.0
+
+# Requêtes HTTP (API Neutrino) avec correctifs de sécurité selon la version Python
+requests>=2.33.0,<3.0.0; python_version >= "3.10"
+requests>=2.32.4,<2.33.0; python_version == "3.9"
+requests>=2.32.3,<2.32.4; python_version < "3.9"
