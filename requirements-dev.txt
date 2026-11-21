@@ -1,0 +1,14 @@
+# Inclut les dépendances d'exécution
+-r requirements.txt
+
+# Tests & couverture
+pytest>=8.0.0,<10.0.0
+pytest-cov>=5.0.0,<8.0.0
+
+# Lint, formatage & typage statique
+ruff>=0.8.0,<1.0.0
+mypy>=1.11.0,<3.0.0
+types-requests>=2.32.0,<3.0.0
+
+# Audit de sécurité statique (SAST)
+bandit>=1.7.9,<2.0.0
