@@ -6,7 +6,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
-## [2.0.0] - 2026-11-05
+## [1.1] - 2026-11-05
 
 ### Ajouté
 - Refactorisation complète du code pour une structure modulaire et propre.
@@ -21,7 +21,7 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
-## [1.0.0] - Initial Release
+## [1.0] - Initial Release
 
 ### Ajouté
 - Lancement initial de PhoneIntel sur le terminal.
