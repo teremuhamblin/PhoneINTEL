@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Script d'installation sécurisé et automatisé pour PhoneINTEL (v1.1-alpha)
-# Auteur / Mainteneur : HamBlin Teremu
 # Supporte : Termux (Android 16), Debian/Ubuntu/Kali, Arch, Fedora & macOS
 # ==============================================================================
 
 set -euo pipefail
 IFS=$'\n\t'
 
-# --- Palette Ice-Blue (désactivée automatiquement si non-TTY) ---
 if [ -t 1 ]; then
     readonly ICE='\033[1;96m'
     readonly GREEN='\033[1;32m'
@@ -20,7 +18,6 @@ else
     readonly ICE='' GREEN='' YELLOW='' RED='' DIM='' NC=''
 fi
 
-# --- Chemins & options par défaut ---
 SCRIPT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly VENV_DIR="${HOME}/.venvs/phoneintel"
@@ -29,12 +26,11 @@ readonly WRAPPER_PATH="${BIN_DIR}/phoneintel"
 readonly LOG_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/phoneintel"
 readonly LOG_FILE="${LOG_DIR}/install.log"
 
-INSTALL_MODE="auto"     # auto | local | pypi
+INSTALL_MODE="auto"
 DEV_EXTRAS=false
 AUTO_YES=false
 PLATFORM="unknown"
 
-# --- Journalisation sécurisée ---
 mkdir -p "$LOG_DIR"
 chmod 700 "$LOG_DIR"
 touch "$LOG_FILE"
@@ -62,8 +58,8 @@ Usage: bash install.sh [OPTIONS]
 Options:
   --local        Force l'installation depuis le dépôt local (src/phoneintel.py)
   --pypi         Force l'installation depuis PyPI (pip install phoneintel)
-  --dev          Installe aussi les outils dev/CI (pytest, ruff, mypy, bandit)
-  -y, --yes      Mode non-interactif (accepte automatiquement les mises à jour)
+  --dev          Installe les outils dev/CI via requirements-dev.txt
+  -y, --yes      Mode non-interactif
   -h, --help     Affiche cette aide
 EOF
     exit 0
@@ -91,7 +87,6 @@ parse_args() {
     fi
 }
 
-# --- 1. Détection de l'environnement ---
 detect_platform() {
     log_info "Détection de l'environnement d'exécution..."
     if [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux" ]; then
@@ -107,25 +102,26 @@ detect_platform() {
     else
         PLATFORM="generic"
     fi
-    log_success "Plateforme détectée : ${PLATFORM} (mode installation : ${INSTALL_MODE})"
+    log_success "Plateforme : ${PLATFORM} (mode : ${INSTALL_MODE})"
 }
 
-# --- 2. Dépendances système & stockage Termux ---
 install_system_dependencies() {
+    local sudo_cmd=""
+    [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && sudo_cmd="sudo"
+
     case "$PLATFORM" in
         termux)
             if [ ! -d "${HOME}/storage" ] && [ "$AUTO_YES" = false ] && command -v termux-setup-storage >/dev/null 2>&1; then
-                log_warn "Configuration du stockage Termux (autorisation Android possible)..."
+                log_warn "Configuration du stockage Termux..."
                 termux-setup-storage || log_warn "Stockage non configuré, poursuite..."
             fi
             log_info "Mise à jour des paquets Termux..."
-            pkg update -y || log_warn "pkg update partiel, poursuite..."
+            pkg update -y || log_warn "pkg update partiel."
             DEBIAN_FRONTEND=noninteractive pkg upgrade -y \
                 -o Dpkg::Options::="--force-confdef" \
                 -o Dpkg::Options::="--force-confold" || log_warn "pkg upgrade ignoré."
             for dep in python git libffi openssl clang make; do
                 if ! dpkg -s "$dep" >/dev/null 2>&1; then
-                    log_info "Installation Termux : $dep"
                     pkg install -y "$dep" || log_error "Échec installation : $dep"
                 fi
             done
@@ -133,25 +129,15 @@ install_system_dependencies() {
         debian)
             if ! command -v python3 >/dev/null 2>&1 || ! python3 -m venv --help >/dev/null 2>&1; then
                 log_info "Installation de python3, python3-venv et git via apt..."
-                local sudo_cmd=""
-                [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && sudo_cmd="sudo"
                 $sudo_cmd apt-get update -y
                 $sudo_cmd apt-get install -y python3 python3-venv python3-pip git
             fi
             ;;
         arch)
-            if ! command -v python3 >/dev/null 2>&1; then
-                local sudo_cmd=""
-                [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && sudo_cmd="sudo"
-                $sudo_cmd pacman -Sy --noconfirm python python-pip git
-            fi
+            command -v python3 >/dev/null 2>&1 || $sudo_cmd pacman -Sy --noconfirm python python-pip git
             ;;
         fedora)
-            if ! command -v python3 >/dev/null 2>&1; then
-                local sudo_cmd=""
-                [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && sudo_cmd="sudo"
-                $sudo_cmd dnf install -y python3 python3-pip git
-            fi
+            command -v python3 >/dev/null 2>&1 || $sudo_cmd dnf install -y python3 python3-pip git
             ;;
         macos)
             command -v python3 >/dev/null 2>&1 || brew install python git
@@ -161,20 +147,15 @@ install_system_dependencies() {
             ;;
     esac
 
-    if ! command -v python3 >/dev/null 2>&1; then
-        log_error "Python 3.8+ est introuvable. Installez Python avant de relancer."
-    fi
-
-    # Vérification Python >= 3.8
-    if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)'; then
+    command -v python3 >/dev/null 2>&1 || log_error "Python 3.8+ introuvable."
+    python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' || \
         log_error "Python 3.8+ requis (détecté : $(python3 --version 2>&1))."
-    fi
-    log_success "Prérequis Python validés ($(python3 --version 2>&1))."
+
+    log_success "Prérequis validés ($(python3 --version 2>&1))."
 }
 
-# --- 3. Environnement virtuel Python isolé (conforme PEP 668) ---
 setup_python_venv() {
-    log_info "Préparation du venv isolé dans ${VENV_DIR}..."
+    log_info "Configuration du venv isolé dans ${VENV_DIR}..."
     mkdir -p "$(dirname "$VENV_DIR")"
 
     if [ ! -d "$VENV_DIR" ]; then
@@ -185,29 +166,30 @@ setup_python_venv() {
     "$venv_python" -m pip install --upgrade pip --no-cache-dir >/dev/null || log_warn "Mise à jour pip ignorée."
 
     if [ "$INSTALL_MODE" = "local" ]; then
-        log_info "Installation locale depuis ${SCRIPT_DIR}..."
-        if [ -f "${SCRIPT_DIR}/requirements.txt" ]; then
+        if [ "$DEV_EXTRAS" = true ] && [ -f "${SCRIPT_DIR}/requirements-dev.txt" ]; then
+            log_info "Installation complète (runtime + dev) via requirements-dev.txt..."
+            "$venv_python" -m pip install --no-cache-dir -r "${SCRIPT_DIR}/requirements-dev.txt"
+        elif [ -f "${SCRIPT_DIR}/requirements.txt" ]; then
+            log_info "Installation runtime via requirements.txt..."
             "$venv_python" -m pip install --no-cache-dir -r "${SCRIPT_DIR}/requirements.txt"
         else
-            "$venv_python" -m pip install --no-cache-dir phonenumbers
+            "$venv_python" -m pip install --no-cache-dir phonenumbers requests
         fi
+
         if [ -f "${SCRIPT_DIR}/pyproject.toml" ]; then
             "$venv_python" -m pip install --no-cache-dir -e "${SCRIPT_DIR}" --no-deps
         fi
     else
         log_info "Installation depuis PyPI (phoneintel)..."
         "$venv_python" -m pip install --no-cache-dir --upgrade phoneintel
-    fi
-
-    if [ "$DEV_EXTRAS" = true ]; then
-        log_info "Installation des outils dev/sécurité (pytest, ruff, mypy, bandit)..."
-        "$venv_python" -m pip install --no-cache-dir pytest pytest-cov ruff mypy bandit
+        if [ "$DEV_EXTRAS" = true ] && [ -f "${SCRIPT_DIR}/requirements-dev.txt" ]; then
+            "$venv_python" -m pip install --no-cache-dir -r "${SCRIPT_DIR}/requirements-dev.txt"
+        fi
     fi
 
     log_success "Environnement Python configuré."
 }
 
-# --- 4. Wrapper global sécurisé (sans source activate) ---
 create_wrapper() {
     log_info "Création du lanceur global dans ${WRAPPER_PATH}..."
     mkdir -p "$BIN_DIR"
@@ -229,7 +211,6 @@ EOF
 
     chmod 755 "$WRAPPER_PATH"
 
-    # Ajout idempotent au PATH dans .bashrc / .zshrc sans jamais les sourcer
     local path_line='export PATH="$HOME/.local/bin:$PATH"'
     for rc in "${HOME}/.bashrc" "${HOME}/.zshrc"; do
         if [ -f "$rc" ] && ! grep -Fq '.local/bin' "$rc"; then
@@ -238,23 +219,22 @@ EOF
         fi
     done
     export PATH="${BIN_DIR}:${PATH}"
-    log_success "Commande 'phoneintel' installée."
+    log_success "Commande 'phoneintel' prête."
 }
 
-# --- 5. Validation réelle de bout en bout ---
 verify_installation() {
-    log_info "Validation fonctionnelle de l'installation..."
+    log_info "Validation fonctionnelle..."
     [ -x "$WRAPPER_PATH" ] || log_error "Lanceur introuvable : $WRAPPER_PATH"
 
     if "$WRAPPER_PATH" --help >/dev/null 2>&1; then
-        log_success "PhoneINTEL installé et opérationnel !"
+        log_success "PhoneINTEL installé avec succès !"
         printf '\n%bCommandes prêtes :%b\n' "$GREEN" "$NC"
-        printf '  %bphoneintel%b                          # Assistant interactif complet\n' "$ICE" "$NC"
-        printf '  %bphoneintel --info +33612345678%b      # Analyse OSINT rapide\n' "$ICE" "$NC"
+        printf '  %bphoneintel%b                          # Assistant interactif\n' "$ICE" "$NC"
+        printf '  %bphoneintel --info +33612345678%b      # Analyse OSINT\n' "$ICE" "$NC"
         printf '  %bphoneintel --help%b                   # Aide complète\n' "$ICE" "$NC"
-        printf '%b  (Si la commande est introuvable dans ce terminal : export PATH="$HOME/.local/bin:$PATH")%b\n\n' "$DIM" "$NC"
+        printf '%b  (Si besoin dans cette session : export PATH="$HOME/.local/bin:$PATH")%b\n\n' "$DIM" "$NC"
     else
-        log_error "Le test d'exécution 'phoneintel --help' a échoué."
+        log_error "Échec du test 'phoneintel --help'."
     fi
 }
 
