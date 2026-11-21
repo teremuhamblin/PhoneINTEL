@@ -27,22 +27,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install lint & security tools
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            pip install phonenumbers
-          fi
-          pip install ruff mypy bandit
+          pip install -r requirements-dev.txt
 
       - name: Lint with Ruff
         run: ruff check src/ tests/
 
       - name: Type check with Mypy
-        run: mypy --ignore-missing-imports src/ tests/
+        run: mypy src/ tests/
 
       - name: Security static analysis with Bandit
         run: bandit -r src/ -ll
@@ -68,16 +67,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install runtime & test dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            pip install phonenumbers
-          fi
-          pip install pytest pytest-cov
+          pip install -r requirements-dev.txt
+          pip install -e . --no-deps
           pip check
 
       - name: Run unit & security tests with Pytest
@@ -85,9 +84,7 @@ jobs:
 
       - name: Smoke test CLI & JSON output
         run: |
-          python -m pip install -e . --no-deps 2>/dev/null || true
-
-          # 1. Analyse valide + JSON + RGPD mask
+          # 1. Analyse valide + JSON + masquage RGPD
           OUT="$(python src/phoneintel.py --info +33612345678 --mask --json)"
           echo "$OUT"
           python -c 'import json, sys; d = json.loads(sys.argv[1]); assert d["region_code"] == "FR" and "*" in d["e164"]' "$OUT"
@@ -96,7 +93,7 @@ jobs:
           DORKS="$(python src/phoneintel.py --dorks +33612345678 --type social_networks --engine duckduckgo --json)"
           python -c 'import json, sys; d = json.loads(sys.argv[1]); assert "duckduckgo.com" in d["social_networks"]' "$DORKS"
 
-          # 3. Rejet strict d'une entrée invalide (code retour non nul attendu)
+          # 3. Rejet strict d'une entrée invalide
           if python src/phoneintel.py "invalid123" 2>/dev/null; then
             echo "❌ ÉCHEC : un numéro invalide aurait dû retourner un code d'erreur."
             exit 1
@@ -108,6 +105,7 @@ jobs:
         run: |
           {
             echo "## 🫆 PhoneINTEL CI Summary"
+            echo "- **Dépendances :** \`requirements.txt\` + \`requirements-dev.txt\` + \`pyproject.toml\` ✅"
             echo "- **Lint & SAST :** Ruff, Mypy & Bandit ✅"
             echo "- **Matrice Python :** \`3.9\` (ubuntu-24.04), \`3.10\`, \`3.11\`, \`3.12\`, \`3.13\` ✅"
             echo "- **Tests :** Pytest + Couverture + Smoke tests CLI/JSON/RGPD ✅"
